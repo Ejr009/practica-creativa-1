@@ -1,0 +1,32 @@
+# Discos e imágenes generados o descargados
+*.qcow2
+*.iso
+*.img
+
+# Definiciones de VM generadas (conservar la plantilla oficial)
+*.xml
+!plantilla-vm-pc1.xml
+
+# Estado de ejecución, logs y temporales
+.auto-p2-state.json
+*.log
+*.bak
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.swp
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Datos personales / secretos accidentales
+.env
+.env.*
+*.key
+*.pem
