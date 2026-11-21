@@ -4,7 +4,7 @@ Automatización en Python del escenario de balanceador de la Práctica 2 de CDPS
 
 ## Estado
 
-**Base funcional de referencia (v4).** Probado en el laboratorio remoto con 1, 3 y 5 servidores; conectividad IP entre redes, apagado/arranque, persistencia de datos y limpieza de VMs/bridges en los escenarios comprobados. Aún pendientes: cerrar la auditoría de casos límite y desarrollar opcionales.
+**Versión obligatoria validada (fix/robustez).** Probado en el laboratorio remoto con 1, 3 y 5 servidores; conectividad IP entre redes, apagado/arranque, persistencia de datos y limpieza de VMs/bridges en los escenarios comprobados. Aún pendientes: cerrar la auditoría de casos límite y desarrollar opcionales.
 
 ## Estructura
 
@@ -30,6 +30,16 @@ python3 auto-p2.py undefine
 
 `undefine` elimina discos diferenciales y configuraciones generadas; antes de ejecutarlo, conservar cualquier dato que se necesite en el entorno virtual.
 
+## Pruebas offline
+
+Sin arrancar VMs ni modificar la red del host, ejecutar desde la raíz:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+Las pruebas emplean mocks para comandos de KVM/OVS; antes de integrar cambios es necesario repetir las pruebas reales en el laboratorio.
+
 ## Colaboración
 
 - `main`: versión funcional revisada.
@@ -38,4 +48,4 @@ python3 auto-p2.py undefine
 
 ## Entrega académica
 
-El entregable oficial es el código empaquetado en ZIP/TGZ a Moodle y una defensa oral, no este repositorio por sí solo. Cada integrante deberá comprender y poder explicar el código. El repositorio comienza privado y se comparte con el equipo cuando se acuerde la colaboración.
+El entregable oficial es el código empaquetado en ZIP/TGZ a Moodle y una defensa oral, no este repositorio por sí solo. Cada integrante deberá comprender y poder explicar el código. El repositorio puede compartirse con el equipo mediante permisos de colaboración cuando se acuerde. Evitar incorporar imágenes de VM, archivos temporales o credenciales.
