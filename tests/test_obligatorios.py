@@ -104,8 +104,8 @@ class ObligatoriosSinKvm(unittest.TestCase):
         def mock_command(args, **kwargs):
             args = [str(arg) for arg in args]
             calls.append(args)
-            if args[:3] == ["sudo", "virsh", "dominfo"]:
-                return subprocess.CompletedProcess(args, 1, "", "not found")
+            if args == ["sudo", "virsh", "list", "--all", "--name"]:
+                return subprocess.CompletedProcess(args, 0, "", "")
             return subprocess.CompletedProcess(args, 0, "", "")
 
         with patch.object(self.lib, "ejecutar", side_effect=mock_command):
@@ -136,8 +136,7 @@ class ObligatoriosSinKvm(unittest.TestCase):
         self.app.TEMPLATE.write_text("<domain><devices>")
 
         def fake_command(args, **kwargs):
-            code = 1 if args[:3] == ["sudo", "virsh", "dominfo"] else 0
-            return subprocess.CompletedProcess(args, code, "", "")
+            return subprocess.CompletedProcess(args, 0, "", "")
 
         with patch.object(self.lib, "ejecutar", side_effect=fake_command):
             with patch.object(self.app, "host_network"):
@@ -174,6 +173,68 @@ class ObligatoriosSinKvm(unittest.TestCase):
             with self.assertRaisesRegex(self.lib.ErrorEscenario, "fallo simulado"):
                 app.define(1)
             rollback.assert_called_once_with()
+
+    def test_ovs_distingue_existencia_y_errores(self):
+        net = self.lib.NET("RED1")
+        cmd = ["sudo", "ovs-vsctl", "br-exists", "RED1"]
+
+        for code, expected in ((0, True), (2, False)):
+            with self.subTest(code=code):
+                result = subprocess.CompletedProcess(cmd, code, "", "")
+                with patch.object(self.lib, "ejecutar", return_value=result):
+                    self.assertEqual(net.exists(), expected)
+
+        failure = subprocess.CompletedProcess(
+            cmd, 1, "", "Fallo simulado de OVS"
+        )
+        with patch.object(self.lib, "ejecutar", return_value=failure):
+            with self.assertRaisesRegex(
+                self.lib.ErrorEscenario, "Fallo simulado de OVS"
+            ):
+                net.exists()
+
+    def test_ovs_error_en_undefine_conserva_estado(self):
+        app = self.app
+        state = {
+            "created_by": "auto-p2.py",
+            "vms": ["c1", "fw", "lb", "s1"],
+            "bridges_added": ["RED1"],
+            "host_address_added": False,
+            "host_routes_added": [],
+        }
+        app.save_state(state)
+
+        class FakeVM:
+            def __init__(self, name):
+                self.name = name
+
+            def stop_vm(self):
+                pass
+
+            def state(self):
+                return "shut off"
+
+            def undefine_vm(self):
+                pass
+
+            def remove_files(self):
+                pass
+
+        failure = subprocess.CompletedProcess(
+            ["sudo", "ovs-vsctl", "br-exists", "RED1"],
+            1, "", "Fallo simulado de OVS"
+        )
+
+        with patch.object(app, "VM", FakeVM), patch.object(
+            self.lib, "ejecutar", return_value=failure
+        ):
+            with self.assertRaisesRegex(
+                self.lib.ErrorEscenario, "Fallo simulado de OVS"
+            ):
+                app.undefine()
+
+        self.assertTrue(app.STATE.exists())
+        self.assertEqual(app.load_state(), state)
 
     def test_virsh_distingue_ausencia_y_errores(self):
         vm = self.lib.VM("s1")
