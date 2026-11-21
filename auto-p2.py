@@ -239,13 +239,46 @@ def undefine():
     if cloud_root.exists() and not any(cloud_root.iterdir()):
         cloud_root.rmdir()
 
-    # Se eliminan solo los cambios del host registrados como nuestros.
+    # Eliminar solo los recursos del host creados por este escenario.
+    # Si ya no existen, se permite continuar; otros fallos se notifican.
     for network in state["host_routes_added"]:
-        ejecutar(["sudo", "ip", "route", "del", network,
-                  "via", HOST_GATEWAY, "dev", "RED1"], comprobar=False)
+        result = ejecutar(
+            ["sudo", "ip", "route", "del", network,
+             "via", HOST_GATEWAY, "dev", "RED1"],
+            comprobar=False,
+        )
+        if result.returncode != 0:
+            remaining = ejecutar(
+                ["ip", "-4", "route", "show", network]
+            ).stdout.strip()
+            if remaining:
+                raise ErrorEscenario(
+                    f"No se pudo eliminar la ruta {network}: "
+                    f"{result.stderr.strip() or result.stdout.strip()}"
+                )
+            LOG.warning("Ruta ya ausente: %s", network)
+
     if state["host_address_added"]:
-        ejecutar(["sudo", "ip", "addr", "del", HOST_ADDRESS,
-                  "dev", "RED1"], comprobar=False)
+        result = ejecutar(
+            ["sudo", "ip", "addr", "del", HOST_ADDRESS,
+             "dev", "RED1"],
+            comprobar=False,
+        )
+        if result.returncode != 0:
+            addresses = ejecutar(
+                ["ip", "-4", "-o", "addr", "show"]
+            ).stdout.splitlines()
+            still_present = any(
+                line.split()[1].split("@")[0] == "RED1"
+                and f"inet {HOST_ADDRESS}" in line
+                for line in addresses
+            )
+            if still_present:
+                raise ErrorEscenario(
+                    f"No se pudo eliminar la dirección {HOST_ADDRESS}: "
+                    f"{result.stderr.strip() or result.stdout.strip()}"
+                )
+            LOG.warning("Dirección del host ya ausente: %s", HOST_ADDRESS)
     for name in reversed(state["bridges_added"]):
         NET(name).destroy_net()
     STATE.unlink()
