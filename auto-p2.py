@@ -79,18 +79,43 @@ def specifications(num_servers):
 
 
 def save_state(state):
-    STATE.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+    """Escribe el estado de forma atómica para evitar archivos truncados."""
+    temporary = STATE.with_name(STATE.name + ".tmp")
+    try:
+        temporary.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(STATE)
+    except OSError as exc:
+        raise ErrorEscenario(f"No se puede guardar el estado: {exc}") from exc
 
 
 def load_state():
+    """Valida el inventario antes de operar sobre VMs y archivos locales."""
     if not STATE.is_file():
         raise ErrorEscenario("Escenario no definido por auto-p2.py; ejecuta 'define'")
     try:
         state = json.loads(STATE.read_text(encoding="utf-8"))
     except (ValueError, OSError) as exc:
         raise ErrorEscenario(f"No se puede leer el estado: {exc}") from exc
-    if state.get("created_by") != "auto-p2.py":
+    if not isinstance(state, dict) or state.get("created_by") != "auto-p2.py":
         raise ErrorEscenario("Archivo de estado no reconocido")
+
+    vms = state.get("vms")
+    if not isinstance(vms, list) or not 4 <= len(vms) <= 8:
+        raise ErrorEscenario("Inventario de VMs inválido en el archivo de estado")
+    expected = ["c1", "fw", "lb"] + [f"s{i}" for i in range(1, len(vms) - 2)]
+    if vms != expected:
+        raise ErrorEscenario("Nombres u orden de VMs inválidos en el archivo de estado")
+
+    bridges = state.get("bridges_added")
+    routes = state.get("host_routes_added")
+    if (not isinstance(bridges, list) or len(bridges) != len(set(map(str, bridges)))
+            or not all(isinstance(x, str) and x in NETWORKS for x in bridges)):
+        raise ErrorEscenario("Bridges inválidos en el archivo de estado")
+    if (not isinstance(routes, list) or len(routes) != len(set(map(str, routes)))
+            or not all(isinstance(x, str) and x in HOST_ROUTES for x in routes)):
+        raise ErrorEscenario("Rutas inválidas en el archivo de estado")
+    if type(state.get("host_address_added")) is not bool:
+        raise ErrorEscenario("Dirección del host inválida en el archivo de estado")
     return state
 
 
@@ -139,13 +164,24 @@ def define(num_servers):
     }
     save_state(state)
     LOG.info("Definiendo escenario con %s servidores", num_servers)
-    for name in NETWORKS:
-        if NET(name).create_net():
-            state["bridges_added"].append(name)
-            save_state(state)
-    host_network(state)
-    for name, interfaces, forwarding in specs:
-        VM(name).define_vm(BASE, interfaces, forwarding=forwarding)
+    try:
+        for name in NETWORKS:
+            if NET(name).create_net():
+                state["bridges_added"].append(name)
+                save_state(state)
+        host_network(state)
+        for name, interfaces, forwarding in specs:
+            VM(name).define_vm(BASE, interfaces, forwarding=forwarding)
+    except (ErrorEscenario, OSError) as exc:
+        LOG.error("Fallo durante define; intentando deshacer los cambios parciales")
+        try:
+            undefine()
+        except (ErrorEscenario, OSError) as cleanup_error:
+            raise ErrorEscenario(
+                f"Falló define ({exc}) y la limpieza parcial ({cleanup_error}). "
+                "Conservamos el estado para reintentar 'undefine'."
+            ) from exc
+        raise
     LOG.info("Escenario definido. Ahora ejecuta 'python3 auto-p2.py start'")
 
 
@@ -213,6 +249,7 @@ def undefine():
     for name in reversed(state["bridges_added"]):
         NET(name).destroy_net()
     STATE.unlink()
+    STATE.with_name(STATE.name + ".tmp").unlink(missing_ok=True)
     LOG.info("Escenario liberado; se conservan la imagen base, XML plantilla y scripts")
 
 
@@ -221,10 +258,24 @@ def main():
     parser.add_argument("orden", choices=["define", "start", "stop", "undefine"])
     args = parser.parse_args()
     try:
-        cfg = read_config()
-        initialize_logging(cfg.get("debug", False))
-        {"define": lambda: define(cfg["num_servers"]),
-         "start": start, "stop": stop, "undefine": undefine}[args.orden]()
+        # Las órdenes de limpieza dependen del estado guardado, no del JSON.
+        # Así se puede recuperar el laboratorio incluso si el JSON está dañado.
+        if args.orden in ("stop", "undefine"):
+            try:
+                cfg = read_config()
+            except ErrorEscenario as config_error:
+                initialize_logging(False)
+                LOG.warning("Configuración inválida, se usa el estado para limpiar: %s", config_error)
+            else:
+                initialize_logging(cfg.get("debug", False))
+        else:
+            cfg = read_config()
+            initialize_logging(cfg.get("debug", False))
+
+        if args.orden == "define":
+            define(cfg["num_servers"])
+        else:
+            {"start": start, "stop": stop, "undefine": undefine}[args.orden]()
     except (ErrorEscenario, OSError) as exc:
         LOG.error("%s", exc)
         return 1
