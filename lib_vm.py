@@ -51,9 +51,18 @@ class NET:
         self.name = name
 
     def exists(self):
-        return ejecutar(
-            ["sudo", "ovs-vsctl", "br-exists", self.name], comprobar=False
-        ).returncode == 0
+        resultado = ejecutar(
+            ["sudo", "ovs-vsctl", "br-exists", self.name],
+            comprobar=False
+        )
+        if resultado.returncode == 0:
+            return True
+        if resultado.returncode == 2:
+            return False
+        detalle = resultado.stderr.strip() or resultado.stdout.strip()
+        raise ErrorEscenario(
+            f"No se pudo consultar el bridge {self.name}: {detalle}"
+        )
 
     def create_net(self):
         """Crea el bridge y devuelve True si era nuevo."""

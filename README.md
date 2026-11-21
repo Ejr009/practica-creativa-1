@@ -4,7 +4,7 @@ Automatización en Python del escenario de balanceador de la Práctica 2 de CDPS
 
 ## Estado
 
-**Implementación obligatoria validada.** Probada en el laboratorio remoto con 1, 3 y 5 servidores, incluyendo conectividad IP, apagado, reinicio, persistencia y limpieza. Superadas 14 pruebas automáticas, incluidas pruebas de manejo de errores y rollback. Las funcionalidades adicionales quedan pendientes.
+**Implementación obligatoria validada.** Probada en el laboratorio remoto con 1, 3 y 5 servidores, incluyendo conectividad IP, apagado, reinicio, persistencia y limpieza. Superadas 16 pruebas automáticas, incluidas pruebas de manejo de errores y rollback. Las funcionalidades adicionales quedan pendientes.
 
 ## Estructura
 
