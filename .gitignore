@@ -7,8 +7,10 @@
 *.xml
 !plantilla-vm-pc1.xml
 
-# Estado de ejecución, logs y temporales
+# Estado de ejecución, cloud-init, logs y temporales
 .auto-p2-state.json
+.auto-p2-state.json.tmp
+.cloud-init/
 *.log
 *.bak
 *.tar
