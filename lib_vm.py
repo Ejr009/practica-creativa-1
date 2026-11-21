@@ -81,10 +81,13 @@ class VM:
         self.cloud_dir = WORKDIR / ".cloud-init" / name
 
     def is_defined(self):
+        """Comprueba si la VM existe, notificando errores de libvirt."""
         resultado = ejecutar(
-            ["sudo", "virsh", "dominfo", self.name], comprobar=False
+            ["sudo", "virsh", "list", "--all", "--name"]
         )
-        return resultado.returncode == 0
+        return self.name in (
+            line.strip() for line in resultado.stdout.splitlines()
+        )
 
     def state(self):
         """Estado normalizado: libvirt puede devolverlo en español o inglés."""
@@ -92,6 +95,11 @@ class VM:
             ["sudo", "virsh", "domstate", self.name], comprobar=False
         )
         if resultado.returncode != 0:
+            if self.is_defined():
+                detalle = resultado.stderr.strip() or resultado.stdout.strip()
+                raise ErrorEscenario(
+                    f"No se pudo consultar el estado de {self.name}: {detalle}"
+                )
             return None
         estado = resultado.stdout.strip().lower()
         equivalencias = {
@@ -199,7 +207,12 @@ class VM:
         ])
         self._cloud_init(interfaces, forwarding)
 
-        tree = ET.parse(TEMPLATE)
+        try:
+            tree = ET.parse(TEMPLATE)
+        except ET.ParseError as exc:
+            raise ErrorEscenario(
+                f"Plantilla XML inválida: {exc}"
+            ) from exc
         root = tree.getroot()
         name_element = root.find("name")
         disk_source = root.find("./devices/disk[@device='disk']/source")

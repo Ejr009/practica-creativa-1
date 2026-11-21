@@ -132,6 +132,23 @@ class ObligatoriosSinKvm(unittest.TestCase):
         self.assertEqual(len([x for x in calls if x[0] == "genisoimage"]), 8)
         self.assertEqual(len([x for x in calls if x[:3] == ["sudo", "virsh", "define"]]), 8)
 
+    def test_xml_invalido_activa_rollback(self):
+        self.app.TEMPLATE.write_text("<domain><devices>")
+
+        def fake_command(args, **kwargs):
+            code = 1 if args[:3] == ["sudo", "virsh", "dominfo"] else 0
+            return subprocess.CompletedProcess(args, code, "", "")
+
+        with patch.object(self.lib, "ejecutar", side_effect=fake_command):
+            with patch.object(self.app, "host_network"):
+                with patch.object(self.app, "undefine") as rollback:
+                    with self.assertRaisesRegex(
+                        self.lib.ErrorEscenario, "Plantilla XML inválida"
+                    ):
+                        self.app.define(1)
+
+                    rollback.assert_called_once_with()
+
     def test_define_si_falla_invoca_rollback(self):
         app = self.app
         # Ninguna VM existe ni hay ficheros generados: corresponde al preflight normal.
@@ -157,6 +174,62 @@ class ObligatoriosSinKvm(unittest.TestCase):
             with self.assertRaisesRegex(self.lib.ErrorEscenario, "fallo simulado"):
                 app.define(1)
             rollback.assert_called_once_with()
+
+    def test_virsh_distingue_ausencia_y_errores(self):
+        vm = self.lib.VM("s1")
+
+        def maquina_existente(args, **kwargs):
+            if args[2] == "list":
+                return subprocess.CompletedProcess(
+                    args, 0, chr(10).join(("c1", "fw", "lb", "s1", "")), ""
+                )
+            if args[2] == "domstate":
+                return subprocess.CompletedProcess(
+                    args, 1, "", "Fallo de conexión simulado"
+                )
+            self.fail(f"Comando inesperado: {args}")
+
+        with patch.object(
+            self.lib, "ejecutar", side_effect=maquina_existente
+        ) as comandos:
+            self.assertTrue(vm.is_defined())
+
+            with self.assertRaisesRegex(
+                self.lib.ErrorEscenario, "No se pudo consultar"
+            ):
+                vm.state()
+
+            with self.assertRaises(self.lib.ErrorEscenario):
+                vm.undefine_vm()
+
+            self.assertFalse(any(
+                call.args[0][2] == "undefine"
+                for call in comandos.call_args_list
+            ))
+
+        def maquina_ausente(args, **kwargs):
+            if args[2] == "list":
+                return subprocess.CompletedProcess(args, 0, "", "")
+            if args[2] == "domstate":
+                return subprocess.CompletedProcess(
+                    args, 1, "", "Dominio inexistente"
+                )
+            self.fail(f"Comando inesperado: {args}")
+
+        with patch.object(
+            self.lib, "ejecutar", side_effect=maquina_ausente
+        ):
+            self.assertFalse(vm.is_defined())
+            self.assertIsNone(vm.state())
+
+        with patch.object(
+            self.lib, "ejecutar",
+            side_effect=self.lib.ErrorEscenario("libvirt no disponible")
+        ):
+            with self.assertRaisesRegex(
+                self.lib.ErrorEscenario, "libvirt no disponible"
+            ):
+                vm.is_defined()
 
     def test_cli_rechaza_orden_desconocida(self):
         for argv in ([], ["invalid"], ["define", "extra"]):
