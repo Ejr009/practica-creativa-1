@@ -2,7 +2,6 @@
 
 Ejecutar desde la raíz: python3 -m unittest discover -s tests -v
 """
-from contextlib import contextmanager
 import importlib.util
 import json
 import os
@@ -104,8 +103,6 @@ class ObligatoriosSinKvm(unittest.TestCase):
         def mock_command(args, **kwargs):
             args = [str(arg) for arg in args]
             calls.append(args)
-            if args == ["sudo", "virsh", "list", "--all", "--name"]:
-                return subprocess.CompletedProcess(args, 0, "", "")
             return subprocess.CompletedProcess(args, 0, "", "")
 
         with patch.object(self.lib, "ejecutar", side_effect=mock_command):
@@ -242,7 +239,7 @@ class ObligatoriosSinKvm(unittest.TestCase):
         def maquina_existente(args, **kwargs):
             if args[2] == "list":
                 return subprocess.CompletedProcess(
-                    args, 0, chr(10).join(("c1", "fw", "lb", "s1", "")), ""
+                    args, 0, "\n".join(("c1", "fw", "lb", "s1", "")), ""
                 )
             if args[2] == "domstate":
                 return subprocess.CompletedProcess(
