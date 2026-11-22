@@ -4,7 +4,7 @@ Automatización en Python del escenario de la Práctica 2 mediante KVM/libvirt, 
 
 ## Estado
 
-Implementación obligatoria RQ1–RQ10 completada. Probada en UDS con todas las configuraciones de 1 a 5 servidores (despliegue, conectividad IP, apagado, reinicio, persistencia y limpieza), además de 16 pruebas automáticas. Las funcionalidades opcionales están pendientes.
+Implementación obligatoria RQ1–RQ10 completada. Probada en UDS con todas las configuraciones de 1 a 5 servidores (despliegue, conectividad IP, apagado, reinicio, persistencia y limpieza), además de 21 pruebas automáticas. Las funcionalidades opcionales están pendientes.
 
 ## Topología y direccionamiento
 
