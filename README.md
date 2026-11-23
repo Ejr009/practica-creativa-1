@@ -57,11 +57,13 @@ Cada sistema sale por su vecino: C1 y el host usan FW, FW llega a RED3 a través
 
 | Archivo | Función |
 | --- | --- |
-| `auto-p2.py` | Programa principal, topología y ciclo de vida del escenario |
-| `lib_vm.py` | Clases `VM` y `NET` (también exportada como `Red`) |
+| `auto-p2.py` | Punto de entrada: lee los argumentos y llama a la orden |
+| `lib_vm.py` | Librería pública: clases `VM` y `NET` (también `Red`) |
+| `libvm/` | Piezas de la librería: `shell`, `net`, `virsh`, `cloud_init`, `xml_vm`, `console` |
+| `escenario/` | Lógica del escenario: `topology`, `services`, `state`, `host_net`, `bridges` y una orden por fichero (`cmd_*.py`) |
 | `auto-p2.json` | Número de servidores y nivel de depuración |
 | `plantilla-vm-pc1.xml` | Plantilla XML oficial para las VMs |
-| `tests/` | Pruebas automáticas sin levantar máquinas virtuales |
+| `tests/` | Pruebas automáticas sin levantar máquinas virtuales (cada script ≤ 100 líneas) |
 
 La imagen base `cdps-vm-base-pc1.qcow2` se obtiene del laboratorio (`/lab/cdps/pc1/`) y **no se incluye en Git**. El script tampoco la copia: debe estar ya en el directorio de trabajo, junto a la plantilla y los scripts.
 

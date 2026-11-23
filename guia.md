@@ -11,7 +11,7 @@ mkdir -p ~/pc1 && cd ~/pc1
 git clone https://github.com/Ejr009/practica-creativa-1 .   # o: wget https://github.com/Ejr009/practica-creativa-1/archive/refs/heads/main.zip && unzip -j main.zip
 cp /lab/cdps/pc1/cdps-vm-base-pc1.qcow2 .              # imagen base (no está en Git)
 
-ls   # debe verse: auto-p2.py lib_vm.py auto-p2.json plantilla-vm-pc1.xml cdps-vm-base-pc1.qcow2
+ls   # debe verse: auto-p2.py lib_vm.py libvm/ escenario/ auto-p2.json plantilla-vm-pc1.xml cdps-vm-base-pc1.qcow2
 ```
 
 ## 2. Configurar (número de servidores, de 1 a 5)
@@ -122,10 +122,10 @@ sudo virsh console s1               # consola de una VM (salir con Ctrl + ])
 
 | Orden | Qué hace | Dónde |
 | --- | --- | --- |
-| `define` | Bridges con `ovs-vsctl`, red del host, y por VM: qcow2 diferencial, cloud-init, ISO, XML y `virsh define` | `define()` en `auto-p2.py`; `NET.create_net()` y `VM.define_vm()` en `lib_vm.py` |
-| `start [vm]` | `virsh start` y consola de cada VM | `start()`; `VM.start_vm()` y `VM.show_console_vm()` |
-| `stop [vm]` | `virsh shutdown` y espera al apagado | `stop()`; `VM.stop_vm()` |
-| `monitor` | `virsh domstate` y `ping` desde el host | `monitor()` |
-| `undefine` | Apaga, `virsh undefine`, borra ficheros, rutas, dirección del host y bridges | `undefine()` |
+| `define` | Bridges con `ovs-vsctl`, red del host, y por VM: qcow2 diferencial, cloud-init, ISO, XML y `virsh define` | `escenario/cmd_define.py`; `libvm/net.py`, `libvm/cloud_init.py`, `libvm/xml_vm.py` y `VM.define_vm()` en `lib_vm.py` |
+| `start [vm]` | `virsh start` y consola de cada VM | `escenario/cmd_start.py`; `VM.start_vm()`; `libvm/console.py` |
+| `stop [vm]` | `virsh shutdown` y espera al apagado | `escenario/cmd_stop.py`; `VM.stop_vm()` |
+| `monitor` | `virsh domstate` y `ping` desde el host | `escenario/cmd_monitor.py` |
+| `undefine` | Apaga, `virsh undefine`, borra ficheros, rutas, dirección del host y bridges | `escenario/cmd_undefine.py`; `escenario/host_net.py` |
 
-La topología y las rutas salen de `specifications()`; Apache en los servidores y HAProxy en LB, de `services()`.
+La topología y las rutas salen de `escenario/topology.py`; Apache en los servidores y HAProxy en LB, de `escenario/services.py`. Todos los `.py` tienen 100 líneas o menos.
