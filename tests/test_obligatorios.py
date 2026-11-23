@@ -92,7 +92,10 @@ class ObligatoriosSinKvm(unittest.TestCase):
                 with patch.object(self.app, operation) as mock_op:
                     with patch.object(sys, "argv", ["auto-p2.py", operation]):
                         self.assertEqual(self.app.main(), 0)
-                    mock_op.assert_called_once_with()
+                    if operation == "stop":
+                        mock_op.assert_called_once_with(None)
+                    else:
+                        mock_op.assert_called_once_with()
         with patch.object(self.app, "start") as mock_start:
             with patch.object(sys, "argv", ["auto-p2.py", "start"]):
                 self.assertEqual(self.app.main(), 1)
@@ -300,6 +303,54 @@ class ObligatoriosSinKvm(unittest.TestCase):
                 )
                 self.assertNotEqual(process.returncode, 0)
                 self.assertIn("usage:", process.stderr)
+
+    def test_servicios_apache_y_haproxy(self):
+        lb = self.app.services("lb", 3)
+        config = lb["files"][0][1]
+        for n in (1, 2, 3):
+            self.assertIn(f"server s{n} 10.0.10.{65+n}:80 check", config)
+        self.assertNotIn("s4", config)
+        self.assertIn("stats socket /run/haproxy/admin.sock", config)
+        self.assertIn(["systemctl", "enable", "--now", "haproxy"], lb["commands"])
+        self.assertIn(["systemctl", "enable", "--now", "apache2"],
+                      self.app.services("s1", 3)["commands"])
+        self.assertEqual(self.app.services("fw", 3), {})
+
+    def test_cloud_init_incluye_ficheros_y_comandos_extra(self):
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("PyYAML no está instalado")
+        vm = self.lib.VM("lb")
+        with patch.object(self.lib, "ejecutar"):
+            vm._cloud_init([{"bridge": "RED2", "addr": "10.0.10.130/26"}], True,
+                           **self.app.services("lb", 2))
+        data = yaml.safe_load((vm.cloud_dir / "user-data").read_text())
+        paths = [f["path"] for f in data["write_files"]]
+        self.assertIn("/etc/haproxy/haproxy.cfg", paths)
+        self.assertIn(["systemctl", "enable", "--now", "haproxy"], data["runcmd"])
+
+    def test_start_y_stop_de_una_vm(self):
+        state = {"vms": ["c1", "fw", "lb", "s1"]}
+        self.assertEqual(self.app.select(state, None), state["vms"])
+        self.assertEqual(self.app.select(state, "s1"), ["s1"])
+        with self.assertRaises(self.lib.ErrorEscenario):
+            self.app.select(state, "s9")
+        with patch.object(sys, "argv", ["auto-p2.py", "monitor", "s1"]):
+            with self.assertRaises(SystemExit):
+                self.app.main()
+
+    def test_monitor_muestra_estado_y_ping(self):
+        state = {"vms": ["c1", "fw", "lb", "s1"]}
+        with patch.object(self.app, "load_state", return_value=state), \
+             patch.object(self.lib.VM, "state", return_value="running"), \
+             patch.object(self.app, "ejecutar") as run, \
+             patch("builtins.print") as out:
+            run.return_value.returncode = 0
+            self.app.monitor()
+        lines = [c.args[0] for c in out.call_args_list]
+        self.assertEqual(len(lines), 5)
+        self.assertTrue(all("ok" in l for l in lines[1:]))
 
     def test_logging_y_debug_configurables(self):
         self.app.CONFIG.write_text('{"num_servers": 1}')

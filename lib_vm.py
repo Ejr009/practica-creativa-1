@@ -119,8 +119,11 @@ class VM:
         }
         return equivalencias.get(estado, estado)
 
-    def _cloud_init(self, interfaces, forwarding):
-        """Escribe los tres archivos NoCloud y crea su ISO de configuración."""
+    def _cloud_init(self, interfaces, forwarding, files=(), commands=()):
+        """Escribe los tres archivos NoCloud y crea su ISO de configuración.
+
+        files: pares (ruta, contenido) a crear en la VM; commands: comandos extra.
+        """
         self.cloud_dir.mkdir(parents=True, exist_ok=True)
         (self.cloud_dir / "meta-data").write_text(
             f"instance-id: {self.name}-id\nlocal-hostname: {self.name}\n",
@@ -178,6 +181,9 @@ class VM:
                 "    content: |",
                 "      net.ipv4.ip_forward=1",
             ])
+        for path, content in files:
+            user_lines.extend([f"  - path: {path}", "    permissions: '0644'", "    content: |"])
+            user_lines.extend("      " + line for line in content.splitlines())
         user_lines.extend([
             "runcmd:",
             "  - [systemctl, daemon-reload]",
@@ -186,6 +192,7 @@ class VM:
         ])
         if forwarding:
             user_lines.append("  - [sysctl, -p, /etc/sysctl.d/99-cdps-ipforward.conf]")
+        user_lines.extend("  - [" + ", ".join(cmd) + "]" for cmd in commands)
         (self.cloud_dir / "user-data").write_text(
             "\n".join(user_lines) + "\n", encoding="utf-8"
         )
@@ -196,7 +203,7 @@ class VM:
             "user-data", "meta-data", "network-config",
         ], cwd=self.cloud_dir)
 
-    def define_vm(self, image, interfaces, forwarding=False):
+    def define_vm(self, image, interfaces, forwarding=False, files=(), commands=()):
         """Genera disco COW, cloud-init, XML y define la VM con virsh."""
         if self.is_defined():
             raise ErrorEscenario(f"La VM {self.name} ya está definida en libvirt")
@@ -212,7 +219,7 @@ class VM:
             "qemu-img", "create", "-F", "qcow2", "-f", "qcow2",
             "-b", Path(image).resolve(), self.disk,
         ])
-        self._cloud_init(interfaces, forwarding)
+        self._cloud_init(interfaces, forwarding, files, commands)
 
         try:
             tree = ET.parse(TEMPLATE)

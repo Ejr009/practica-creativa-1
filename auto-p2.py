@@ -76,6 +76,39 @@ def specifications(num_servers):
     return specs
 
 
+HAPROXY_CFG = """global
+    stats socket /run/haproxy/admin.sock mode 660 level admin
+defaults
+    mode http
+    timeout connect 5s
+    timeout client 30s
+    timeout server 30s
+frontend web
+    bind *:80
+    default_backend servers
+backend servers
+    balance roundrobin
+{servers}listen stats
+    bind *:8404
+    stats enable
+    stats uri /stats
+    stats admin if TRUE
+"""
+
+
+def services(name, num_servers):
+    """Ficheros y comandos extra de cloud-init: Apache en los S y HAProxy en LB."""
+    if name.startswith("s"):
+        return {"files": [("/var/www/html/index.html", f"<h1>Servidor {name}</h1>\n")],
+                "commands": [["systemctl", "enable", "--now", "apache2"]]}
+    if name == "lb":
+        servers = "".join(f"    server s{n} 10.0.10.{65+n}:80 check\n"
+                          for n in range(1, num_servers + 1))
+        return {"files": [("/etc/haproxy/haproxy.cfg", HAPROXY_CFG.format(servers=servers))],
+                "commands": [["systemctl", "enable", "--now", "haproxy"]]}
+    return {}
+
+
 def save_state(state):
     """Escribe el estado de forma atómica para evitar archivos truncados."""
     temporary = STATE.with_name(STATE.name + ".tmp")
@@ -175,7 +208,8 @@ def define(num_servers):
                 save_state(state)
         host_network(state)
         for name, interfaces, forwarding in specs:
-            VM(name).define_vm(BASE, interfaces, forwarding=forwarding)
+            VM(name).define_vm(BASE, interfaces, forwarding=forwarding,
+                               **services(name, num_servers))
     except (ErrorEscenario, OSError) as exc:
         LOG.error("Fallo durante define; intentando deshacer los cambios parciales")
         try:
@@ -189,8 +223,18 @@ def define(num_servers):
     LOG.info("Escenario definido. Ahora ejecuta 'python3 auto-p2.py start'")
 
 
-def start():
+def select(state, only):
+    """Devuelve las VMs a tratar: todas o solo la indicada."""
+    if only is None:
+        return list(state["vms"])
+    if only not in state["vms"]:
+        raise ErrorEscenario(f"VM desconocida: {only} (opciones: {', '.join(state['vms'])})")
+    return [only]
+
+
+def start(only=None):
     state = load_state()
+    wanted = select(state, only)
     for name in NETWORKS:
         net = NET(name)
         if net.exists():
@@ -206,6 +250,7 @@ def start():
     # Los routers se arrancan primero, pero el script no espera a que completen cloud-init.
     order = [n for n in ("fw", "lb", "c1") if n in state["vms"]]
     order += [n for n in state["vms"] if n.startswith("s")]
+    order = [n for n in order if n in wanted]
     for name in order:
         VM(name).start_vm()
     for name in order:
@@ -229,11 +274,25 @@ def shutdown_all(names):
     )
 
 
-def stop():
+def stop(only=None):
     state = load_state()
     LOG.info("Solicitando apagado ordenado sin borrar discos")
-    shutdown_all(state["vms"])
-    LOG.info("Todas las VMs están paradas. Los datos permanecen en los QCOW2")
+    shutdown_all(select(state, only))
+    LOG.info("VMs paradas. Los datos permanecen en los QCOW2")
+
+
+def monitor():
+    """Muestra el estado de cada VM y si responde a ping desde el host."""
+    state = load_state()
+    print(f"{'VM':<5}{'ESTADO':<12}{'IP':<14}PING")
+    for name, interfaces, _ in specifications(len(state["vms"]) - 3):
+        ip = interfaces[0]["addr"].split("/")[0]
+        estado = VM(name).state() or "no definida"
+        ping = "-"
+        if estado == "running":
+            ok = ejecutar(["ping", "-c", "1", "-W", "1", ip], comprobar=False).returncode == 0
+            ping = "ok" if ok else "sin respuesta"
+        print(f"{name:<5}{estado:<12}{ip:<14}{ping}")
 
 
 def undefine():
@@ -297,12 +356,15 @@ def undefine():
 
 def main():
     parser = argparse.ArgumentParser(description="CDPS Creativa 1: gestión de escenario KVM")
-    parser.add_argument("orden", choices=["define", "start", "stop", "undefine"])
+    parser.add_argument("orden", choices=["define", "start", "stop", "undefine", "monitor"])
+    parser.add_argument("vm", nargs="?", help="solo para start/stop: nombre de una VM (p.ej. s1)")
     args = parser.parse_args()
+    if args.vm and args.orden not in ("start", "stop"):
+        parser.error("el nombre de VM solo se admite con start y stop")
     try:
         # Las órdenes de limpieza dependen del estado guardado, no del JSON.
         # Así se puede recuperar el laboratorio incluso si el JSON está dañado.
-        if args.orden in ("stop", "undefine"):
+        if args.orden in ("stop", "undefine", "monitor"):
             try:
                 cfg = read_config()
             except ErrorEscenario as config_error:
@@ -316,8 +378,10 @@ def main():
 
         if args.orden == "define":
             define(cfg["num_servers"])
+        elif args.orden in ("start", "stop"):
+            {"start": start, "stop": stop}[args.orden](args.vm)
         else:
-            {"start": start, "stop": stop, "undefine": undefine}[args.orden]()
+            {"monitor": monitor, "undefine": undefine}[args.orden]()
     except (ErrorEscenario, OSError) as exc:
         LOG.error("%s", exc)
         return 1
