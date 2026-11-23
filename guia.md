@@ -117,6 +117,7 @@ sudo virsh console s1               # consola de una VM (salir con Ctrl + ])
 | `No hay terminal gráfico` | Ejecuta desde una sesión con entorno gráfico o instala `xterm`. |
 | `curl` no responde o contesta un solo servidor | cloud-init no ha terminado: espera y repite el bucle del apartado 3. |
 | `sudo` pide contraseña | El script no es interactivo: hace falta `sudo` sin contraseña. |
+| `bash: $'\E[200~': orden no encontrada` o `cd: ...pc1~: No existe el fichero` | Al pegar se han colado caracteres de más (`^[[200~` al principio o una `~` al final). Pega con clic derecho o Ctrl+Shift+V, o teclea el comando; `prepare-vnx-debian` solo se ejecuta una vez. |
 
 ## 10. Mapa del código
 
