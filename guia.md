@@ -47,7 +47,7 @@ ls
 cat auto-p2.json
 ```
 
-Para cambiarlo: `nano auto-p2.json`, edita `"num_servers"` y guarda con Ctrl+O, Enter, Ctrl+X. Con `"debug": true` el script muestra cada comando que ejecuta.
+Para cambiarlo sin editor: `sed -i 's/"num_servers": [0-9]*/"num_servers": 3/' auto-p2.json` (pon el número que quieras). Con `"debug": true` el script muestra cada comando que ejecuta.
 
 ## 3. `define`: crear el escenario (sin arrancarlo)
 
@@ -146,12 +146,13 @@ Con `stop` todas pasan a `shut off` sin borrar discos. Tras `start` y 1-2 minuto
 
 ```bash
 python3 auto-p2.py undefine
-nano auto-p2.json
+sed -i 's/"num_servers": [0-9]*/"num_servers": 2/' auto-p2.json
+cat auto-p2.json
 python3 auto-p2.py define
 python3 auto-p2.py start
 ```
 
-Pon por ejemplo `"num_servers": 2`. Tras 1-2 minutos, `monitor` debe mostrar solo s1 y s2, y los `curl` solo alternan entre ellos.
+El `sed` cambia el número de servidores a 2 (pon el que quieras de 1 a 5) y el `cat` te deja comprobarlo. Si `nano` te abre el fichero vacío es que no estás en la carpeta `practica-creativa-1` (comprueba con `pwd`), y para recuperarlo: `git checkout auto-p2.json`. Tras 1-2 minutos, `monitor` debe mostrar solo s1 y s2, y los `curl` solo alternan entre ellos.
 
 ## 9. `undefine`: borrarlo todo
 
