@@ -4,15 +4,27 @@ Todos los comandos están para copiar y pegar, en orden, desde el servidor del l
 
 ## 1. Preparar (una vez)
 
+**Paso 0: evita el error de pegado.** Algunos terminales marcan lo que pegas con `^[[200~` al principio y una `~` al final, y eso rompe el comando. Desactívalo una vez por terminal:
+
 ```bash
-/lab/cnvr/bin/prepare-vnx-debian                       # prepara KVM y Open vSwitch
-
-mkdir -p ~/pc1 && cd ~/pc1
-git clone https://github.com/Ejr009/practica-creativa-1 .   # o: wget https://github.com/Ejr009/practica-creativa-1/archive/refs/heads/main.zip && unzip -j main.zip
-cp /lab/cdps/pc1/cdps-vm-base-pc1.qcow2 .              # imagen base (no está en Git)
-
-ls   # debe verse: auto-p2.py lib_vm.py libvm/ escenario/ auto-p2.json plantilla-vm-pc1.xml cdps-vm-base-pc1.qcow2
+bind 'set enable-bracketed-paste off'
 ```
+
+Después, un comando por línea (sin `&&` ni comentarios):
+
+```bash
+/lab/cnvr/bin/prepare-vnx-debian
+mkdir -p ~/pc1
+cd ~/pc1
+git clone https://github.com/Ejr009/practica-creativa-1.git
+cd practica-creativa-1
+cp /lab/cdps/pc1/cdps-vm-base-pc1.qcow2 .
+ls
+```
+
+Qué hace cada uno: `prepare-vnx-debian` prepara KVM y Open vSwitch; `mkdir` y `cd` crean y entran en la carpeta de trabajo; `git clone` baja el código; `cp` trae la imagen base (no está en Git). El `ls` debe mostrar: `auto-p2.py lib_vm.py libvm/ escenario/ auto-p2.json plantilla-vm-pc1.xml cdps-vm-base-pc1.qcow2`.
+
+Sin Git: `wget https://github.com/Ejr009/practica-creativa-1/archive/refs/heads/main.zip` y `unzip main.zip`.
 
 ## 2. Configurar (número de servidores, de 1 a 5)
 
@@ -117,7 +129,7 @@ sudo virsh console s1               # consola de una VM (salir con Ctrl + ])
 | `No hay terminal gráfico` | Ejecuta desde una sesión con entorno gráfico o instala `xterm`. |
 | `curl` no responde o contesta un solo servidor | cloud-init no ha terminado: espera y repite el bucle del apartado 3. |
 | `sudo` pide contraseña | El script no es interactivo: hace falta `sudo` sin contraseña. |
-| `bash: $'\E[200~': orden no encontrada` o `cd: ...pc1~: No existe el fichero` | Al pegar se han colado caracteres de más (`^[[200~` al principio o una `~` al final). Pega con clic derecho o Ctrl+Shift+V, o teclea el comando; `prepare-vnx-debian` solo se ejecuta una vez. |
+| `bash: $'\E[200~': orden no encontrada` o `cd: ...pc1~: No existe el fichero` | Es el pegado con marcadores (`^[[200~` al principio, `~` al final). Ejecuta una vez `bind 'set enable-bracketed-paste off'` (paso 0 del apartado 1) y pega de nuevo, un comando por línea. |
 
 ## 10. Mapa del código
 
